@@ -1,0 +1,68 @@
+services:
+  server:
+    build:
+      context: .
+      target: development # if a development stage exists, use it
+    ports:
+      - 9000:80
+    depends_on:
+      db:
+        condition: service_healthy
+    secrets:
+      - db-password
+    environment:
+      - PASSWORD_FILE_PATH=/run/secrets/db-password
+      - DB_HOST=db
+      - DB_NAME=my-pg-db
+      - DB_USER=postgres
+      - DB_DRIVER=pgsql
+      - DB_PORT=5432
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /var/www/html
+
+  db:
+    image: postgres:latest
+    restart: always
+    secrets:
+      - db-password
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=my-pg-db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    expose:
+      - 5432
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d my-pg-db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: ["postgres", "-c", "log_statement=all"]  # Commande supplémentaire pour PostgreSQL
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: always
+    ports:
+      - 8080:80
+    depends_on:
+      - db
+    secrets:
+      - db-password
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin # Volume pour persister la configuration du serveur de BDD sur pgAdmin
+    entrypoint: sh -c 'export PGADMIN_DEFAULT_PASSWORD=$(cat /run/secrets/db-password) && /entrypoint.sh'
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD_FILE=/run/secrets/db-password
+
+volumes:
+  db-data:
+  pgadmin-data: # Ce volume contient les données de PgAdmin pour ne pas avoir à reconfigurer le serveur à chaque 'docker compose down'
+secrets:
+  db-password:
+    file: db/password.txt
