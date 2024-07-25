@@ -2,3 +2,5 @@ db/
 README.Docker.md
 
 *.idea
+
+docker-php-kubernetes.yaml
